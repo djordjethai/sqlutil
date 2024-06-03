@@ -2,8 +2,8 @@ from datetime import datetime
 from myfunc.prompts import ConversationDatabase
  
 current_date = datetime.now()
-start_date = current_date.replace(day=1)
-end_date = current_date
+start_date = current_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+end_date = current_date.replace(hour=23, minute=59, second=59, microsecond=999999)
  
 start_date_str = start_date.strftime('%Y-%m-%d %H:%M:%S')
 end_date_str = end_date.strftime('%Y-%m-%d %H:%M:%S')
