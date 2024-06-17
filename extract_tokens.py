@@ -9,7 +9,7 @@ start_date_str = start_date.strftime('%Y-%m-%d %H:%M:%S')
 end_date_str = end_date.strftime('%Y-%m-%d %H:%M:%S')
  
 with ConversationDatabase() as db:
-    all_tokens = db.extract_token_sums_between_dates(start_date_str, end_date_str)
+    all_tokens = db.extract_token_sums_between_dates("2024-01-01", end_date_str)
     embedding_cost = all_tokens["total_embedding_tokens"] / 10**6 * 0.13
     prompt_cost = all_tokens["total_prompt_tokens"] / 10**6 * 5.0
     completion_cost = all_tokens["total_completion_tokens"] / 10**6 * 15.0
