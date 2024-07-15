@@ -14,10 +14,10 @@ class ConversationDatabaseManager:
         """
         Initializes the connection details for the database, with the option to use environment variables as defaults.
         """
-        self.host = host if host is not None else os.getenv('DB_HOST')
-        self.user = user if user is not None else os.getenv('DB_USER')
-        self.password = password if password is not None else os.getenv('DB_PASSWORD')
-        self.database = database if database is not None else os.getenv('DB_NAME')
+        self.host = host if host is not None else os.getenv('MYSQL_HOST')
+        self.user = user if user is not None else os.getenv('MYSQL_USER')
+        self.password = password if password is not None else os.getenv('MYSQL_PASSWORD')
+        self.database = database if database is not None else os.getenv('MYSQL_NAME')
         self.conn = None
         self.cursor = None
 
