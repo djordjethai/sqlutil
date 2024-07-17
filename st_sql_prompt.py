@@ -1,5 +1,5 @@
 import streamlit as st
-from myfunc.prompts import PromptDatabase
+from promptdb import PromptDatabase
 import pandas as pd
 
 st.set_page_config(layout="wide")
@@ -14,6 +14,8 @@ def handle_table_update(table_name, id_column, name_column, additional_fields=No
     with col1:
         with PromptDatabase() as db:
             prompt_names = db.get_records_from_column(table_name, name_column)
+            print(f"Prompt names fetched: {prompt_names}")  # Debug print
+
             selected_name = st.selectbox(f"Select {name_column} to Update", [''] + prompt_names)
             existing_details = db.get_record_by_name(table=table_name, name_column=name_column, value=selected_name) if selected_name else None
 
@@ -28,7 +30,7 @@ def handle_table_update(table_name, id_column, name_column, additional_fields=No
 
             if st.button(f'Update {name_column} Record'):
                 with PromptDatabase() as db:
-                    st.info(db.update_record(table_name, updated_values, (f'{id_column} = %s', [user_id])))
+                    st.info(db.update_record(table_name, updated_values, (f'{id_column} = ?', [user_id])))
             else:
                 st.error(f"Please select a {name_column} to update its details.")
 
@@ -44,14 +46,13 @@ def handle_record_deletion(table_name, id_column, name_column):
 
         if existing_details:
             st.subheader(f"Delete {name_column}")
-            condition = (f"{id_column} = %s", [existing_details[id_column]])
+            condition = (f"{id_column} = ?", [existing_details[id_column]])
             
             if st.button(f'Delete {name_column} Record'):
                 with PromptDatabase() as db:
                     st.info(db.delete_record(table=table_name, condition=condition))
         else:
             st.error(f"Please select a {name_column} to delete.")
-
 
 # Mapping table specifics for reuse
 table_mappings = {
@@ -147,22 +148,43 @@ def add_new_record(form_id, header, table_name, input_fields):
                     else:
                         st.error("This record already exists and cannot be duplicated.")
 
+def show_all_table_data2(table_name):
+    with PromptDatabase() as db: 
+        records, columns = db.get_all_records_from_table(table_name) 
+    df = pd.DataFrame(records, columns=columns)
+    st.caption("To see entire text: Double Click on actual text, or move slider, or enlarge the table view")
+    st.dataframe(df, use_container_width=True, hide_index=True)                
+
+import pandas as pd
 
 def show_all_table_data(table_name):
-     with PromptDatabase() as db: 
-        records, columns = db.get_all_records_from_table(table_name) 
-     df = pd.DataFrame(records, columns=columns)
-     st.caption("To see entire text: Double Click on actual text, or move slider, or enlarge the table view")
-     st.dataframe(df, use_container_width=True, hide_index=True)                
+    with PromptDatabase() as db:
+        records, columns = db.get_all_records_from_table(table_name)
+    
+    # Convert records to tuples explicitly to avoid any hidden issues
+    records = [tuple(record) for record in records]
+    
+    # Ensure each record is a tuple and has the correct length
+    if records and all(len(record) == len(columns) for record in records):
+        try:
+            df = pd.DataFrame(records, columns=columns)
+            st.caption("To see entire text: Double Click on actual text, or move slider, or enlarge the table view")
+            st.dataframe(df, use_container_width=True, hide_index=True)
+        except Exception as e:
+            st.error(f"Failed to create DataFrame: {e}")
+            print(f"Failed to create DataFrame: {e}")
+    else:
+        st.error("Mismatch between record data and column definitions. Please check the database schema and data consistency.")
 
+
+
+
+        
 if operation == "Create New Record":
     st.subheader("Create a New Prompt Record")
     
-    # prvo cemo da odaberemo bazu. ako su pomocne idemo sa add_record, a ako je glavna onda sa add_new_record
-    # pa polako
     tabela_za_unos = st.selectbox("Choose table",[''] + ["Users", "Variables", "Python files", "Prompts", "Relations"])
     col1, col2 = st.columns(2)
-   
     
     if tabela_za_unos in table_configurations:
         config = table_configurations[tabela_za_unos]
@@ -170,26 +192,21 @@ if operation == "Create New Record":
 
         with col2:
             show_all_table_data(config["table_name"])
-
            
     elif tabela_za_unos == "Relations":
         with col1:
             st.subheader('Add a New Relationship Record')
-            # Fetch options for each selectbox
             with PromptDatabase() as db:
-                # Fetch names for the selectboxes
                 prompt_options = db.get_records_from_column('PromptStrings', 'PromptName')
                 user_options = db.get_records_from_column('Users', 'Username')
                 variable_options = db.get_records_from_column('PromptVariables', 'VariableName')
                 file_options = db.get_records_from_column('PythonFiles', 'Filename')
 
-            # Create selectboxes for each ID needed in the relationship record
             selected_prompt_name = st.selectbox('Select Prompt', [''] + prompt_options)
             selected_user_name = st.selectbox('Select User', [''] + user_options)
             selected_variable_name = st.selectbox('Select Variable', [''] + variable_options)
             selected_file_name = st.selectbox('Select File', [''] + file_options)
 
-            # Fetch IDs for the selected names
             if st.button('Add Relationship'):
                 with PromptDatabase() as db:
                     if all([selected_prompt_name, selected_user_name, selected_variable_name, selected_file_name]):
@@ -198,7 +215,6 @@ if operation == "Create New Record":
                         variable_id = db.get_record_by_name('PromptVariables', 'VariableName', selected_variable_name).get('VariableID') if selected_variable_name else None
                         file_id = db.get_record_by_name('PythonFiles', 'Filename', selected_file_name).get('FileID') if selected_file_name else None
                 
-                        # Assuming add_relationship_record method exists and accepts IDs
                         result = db.add_relationship_record(prompt_id, user_id, variable_id, file_id)
                         if result:
                             st.success('Relationship added successfully!')
@@ -217,27 +233,22 @@ elif operation == "Select and Update Record":
     if tabela_za_unos in table_mappings:
         handle_table_update(**table_mappings[tabela_za_unos])
              
-    elif tabela_za_unos == "Relations" :
+    elif tabela_za_unos == "Relations":
         with col1:    
             with PromptDatabase() as db:
                user_names = db.get_records_from_column('Users', 'Username')
             selected_user_name = st.selectbox("Select User Name to Edit Relationship", [''] + user_names, key="edit_rel")
             if selected_user_name:
                 with PromptDatabase() as db:
-                    # Fetch the existing details for the selected username
                     user_details = db.get_record_by_name('Users', 'Username', selected_user_name)
                 if user_details:
-                    # Use the custom function to fetch relationship details
                     with PromptDatabase() as db:
                         relationships = db.get_relationships_by_user_id(user_details['UserID'])
                     if relationships:
-                        # Assuming the relationships variable is a list of dictionaries with each relationship's details
                         for relationship in relationships:
-                            # Directly use the values from the relationship dictionary
                             current_prompt_name = relationship['PromptName']
                             current_variable_name = relationship['VariableName']
                             current_file_name = relationship['Filename']
-                            # Display current selections
                             with PromptDatabase() as db:
                                 prompt_names = db.get_records_from_column('PromptStrings', 'PromptName')
                                 variable_names = db.get_records_from_column('PromptVariables', 'VariableName')
@@ -248,13 +259,11 @@ elif operation == "Select and Update Record":
                             new_selected_file_name = col1.selectbox("Select New File", file_names, index=file_names.index(current_file_name))
 
                             if col1.button(f'Update Relationship for {selected_user_name}'):
-                                # Convert selected names back to IDs
                                 with PromptDatabase() as db:
                                     new_prompt_id = db.get_record_by_name('PromptStrings', 'PromptName', new_selected_prompt_name)['PromptID']
                                     new_variable_id = db.get_record_by_name('PromptVariables', 'VariableName', new_selected_variable_name)['VariableID']
                                     new_file_id = db.get_record_by_name('PythonFiles', 'Filename', new_selected_file_name)['FileID']
 
-                                    # Update the relationship record
                                     success = db.update_relationship_record(relationship['ID'], new_prompt_id, user_details['UserID'], new_variable_id, new_file_id)
                                 if success:
                                     col1.success("Relationship updated successfully!")
@@ -266,14 +275,10 @@ elif operation == "Select and Update Record":
                     col1.error("No relationships found for the selected user.")
 
         with col2:
-         # Assuming show_all_table_data is a function defined elsewhere to display data from a table
             with PromptDatabase() as db:
                 df = db.fetch_relationship_data()
             st.dataframe(df)
-        
-        
-        
-                    
+
 elif operation == "Select and Delete Record":
     st.subheader("Delete Record")
     tabela_za_unos = st.selectbox("Choose table",[''] + ["Users", "Variables", "Python files", "Prompts", "Relations"])
@@ -285,7 +290,6 @@ elif operation == "Select and Delete Record":
 
         with col2:
             show_all_table_data(config["table_name"])
-
 
     elif tabela_za_unos == "Relations":
         with col1:
@@ -302,15 +306,12 @@ elif operation == "Select and Delete Record":
                 with col2: 
                     st.dataframe(df)
                     
-                # Let user select a RelationshipID to operate on
                 relationship_ids = df['RelationshipID'].tolist()
                 selected_relationship_id = st.selectbox("Select a Relationship to Edit or Delete", relationship_ids)
 
-                # Now you can use selected_relationship_id for further operations like editing or deletion
                 if st.button('Delete Relationship'):
                     with PromptDatabase() as db:
-                        # Assuming delete_record function accepts a table name and condition
-                        success = db.delete_record('CentralRelationshipTable', ('ID = %s', [selected_relationship_id]))
+                        success = db.delete_record('CentralRelationshipTable', ('ID = ?', [selected_relationship_id]))
                         if success:
                             st.success("Relationship deleted successfully.")
                             with PromptDatabase() as db:
@@ -325,32 +326,24 @@ elif operation == "Select and Delete Record":
                     st.error("Choose an existing record")                
             else:
                 st.error("Choose Prompt")
-                
 
 elif operation == "Search Prompt Records":
     st.subheader("Display Prompt Records Filtered by Search String")
     
-    # Creating a form for user input
     with st.form("search_prompts"):
-        # Input for entering the search string
         search_string = st.text_input("Enter a search string to filter prompts (empty for all):")
         submit_search = st.form_submit_button("Submit")
         
         if submit_search:
             st.caption("To see entire text: Double Click on actual text, or move slider, or enlarge the table view")
-            # Fetching records based on the search string
             with PromptDatabase() as db:
-                # Assuming the method for searching prompts by text is named 'search_for_string_in_prompt_text'
                 records = db.search_for_string_in_prompt_text(search_string)
             
-            # Displaying the records in a DataFrame
             if records:
-                
                 df = pd.DataFrame(records, columns=['PromptName', 'PromptString'])
                 st.dataframe(df, use_container_width=True, hide_index=True, column_config={
                 "PromptName": st.column_config.Column("Naziv Prompta", width="small"),
                 "PromptString": st.column_config.Column("Tekst Prompta", width="large")
-
             },)
             else:
                 st.write("No records found.")
