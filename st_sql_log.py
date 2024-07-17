@@ -16,8 +16,8 @@ class ConversationDatabaseManager:
         """
         self.host = host if host is not None else os.getenv('MSSQL_HOST')
         self.user = user if user is not None else os.getenv('MSSQL_USER')
-        self.password = password if password is not None else os.getenv('MSSQL_PASSWORD')
-        self.database = database if database is not None else os.getenv('MSSQL_NAME')
+        self.password = password if password is not None else os.getenv('MSSQL_PASS')
+        self.database = database if database is not None else os.getenv('MSSQL_DB')
         self.conn = None
         self.cursor = None
 
@@ -221,4 +221,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
