@@ -1,23 +1,23 @@
 import streamlit as st
 import pandas as pd
 import os
-import mysql.connector
+import pyodbc
 
 st.set_page_config(layout="wide")
 
 class ConversationDatabaseManager:
     """
-    A class to interact with a MySQL database for storing and retrieving conversation data.
+    A class to interact with a MSSQL database for storing and retrieving conversation data.
     """
     
     def __init__(self, host=None, user=None, password=None, database=None):
         """
         Initializes the connection details for the database, with the option to use environment variables as defaults.
         """
-        self.host = host if host is not None else os.getenv('MYSQL_HOST')
-        self.user = user if user is not None else os.getenv('MYSQL_USER')
-        self.password = password if password is not None else os.getenv('MYSQL_PASSWORD')
-        self.database = database if database is not None else os.getenv('MYSQL_NAME')
+        self.host = host if host is not None else os.getenv('MSSQL_HOST')
+        self.user = user if user is not None else os.getenv('MSSQL_USER')
+        self.password = password if password is not None else os.getenv('MSSQL_PASSWORD')
+        self.database = database if database is not None else os.getenv('MSSQL_NAME')
         self.conn = None
         self.cursor = None
 
@@ -25,7 +25,14 @@ class ConversationDatabaseManager:
         """
         Establishes the database connection and returns the instance itself when entering the context.
         """
-        self.conn = mysql.connector.connect(host=self.host, user=self.user, password=self.password, database=self.database)
+        self.conn = pyodbc.connect(
+            driver='{ODBC Driver 18 for SQL Server}',
+            server=self.host,
+            database=self.database,
+            uid=self.user,
+            pwd=self.password,
+            TrustServerCertificate='yes'
+        )
         self.cursor = self.conn.cursor()
         return self
 
@@ -38,11 +45,8 @@ class ConversationDatabaseManager:
             self.cursor.close()
         if self.conn is not None:
             self.conn.close()
-        # Handle exception if needed, can log or re-raise exceptions based on requirements
         if exc_type or exc_val or exc_tb:
-            # Optionally log or handle exception
             pass
-    
     
     def close(self):
         """
@@ -75,29 +79,25 @@ class ConversationDatabaseManager:
         Returns:
         - A list of tuples containing the matching records, or None if no records are found.
         """
-        query = f"SELECT * FROM conversations WHERE {column_name} = %s"
+        query = f"SELECT * FROM conversations WHERE {column_name} = ?"
         self.cursor.execute(query, (column_value,))
         rows = self.cursor.fetchall()
-        if rows:
-            return rows
-        else:
-            return None
+        return rows if rows else None
 
-    def fetch_thread_ids(db, filter_column, filter_value):
+    def fetch_thread_ids(self, filter_column, filter_value):
         """
         Fetches thread IDs based on a filter (either app_name or user_name).
 
         Parameters:
-        - db: Instance of ConversationDatabaseManager.
         - filter_column: Column to filter by ('app_name' or 'user_name').
         - filter_value: Value to filter on in the specified column.
 
         Returns:
         - A list of thread IDs.
         """
-        query = f"SELECT DISTINCT thread_id FROM conversations WHERE {filter_column} = %s"
-        db.cursor.execute(query, (filter_value,))
-        return [row[0] for row in db.cursor.fetchall()]
+        query = f"SELECT DISTINCT thread_id FROM conversations WHERE {filter_column} = ?"
+        self.cursor.execute(query, (filter_value,))
+        return [row[0] for row in self.cursor.fetchall()]
 
     def fetch_distinct_thread_ids(self, column_name, column_value):
         """
@@ -110,12 +110,14 @@ class ConversationDatabaseManager:
         Returns:
         - A list of distinct thread IDs.
         """
-        query = f"SELECT DISTINCT thread_id FROM conversations WHERE {column_name} = %s"
+        query = f"SELECT DISTINCT thread_id FROM conversations WHERE {column_name} = ?"
         self.cursor.execute(query, (column_value,))
         return [row[0] for row in self.cursor.fetchall()]
 
 
+
 # Main app structure
+import streamlit as st
 
 def edit_delete_record_ui(filter_type):
     # Step 1: Select either app_name or user_name
@@ -124,6 +126,7 @@ def edit_delete_record_ui(filter_type):
             options = db.fetch_distinct_column_values("app_name")
         else:  # Assuming User Name
             options = db.fetch_distinct_column_values("user_name")
+    
     selected_filter_option = st.selectbox(f"Select {filter_type}", ['Select...'] + options, key="first_selection")
 
     # Step 2: Select thread_id based on the first selection
@@ -133,7 +136,7 @@ def edit_delete_record_ui(filter_type):
         
         selected_thread_id = st.selectbox("Select Thread ID", ['Select...'] + thread_ids)
     
-    # Proceed to edit/delete once a thread_id is selected
+        # Proceed to edit/delete once a thread_id is selected
         if selected_thread_id and selected_thread_id != 'Select...':
             with ConversationDatabaseManager() as db:
                 record = db.fetch_records_by_column("thread_id", selected_thread_id)
@@ -144,7 +147,7 @@ def edit_delete_record_ui(filter_type):
 
                     if st.button("Submit Changes"):
                         with ConversationDatabaseManager() as db:
-                            update_query = "UPDATE conversations SET conversation = %s WHERE thread_id = %s"
+                            update_query = "UPDATE conversations SET conversation = ? WHERE thread_id = ?"
                             db.cursor.execute(update_query, (new_conversation, selected_thread_id))
                             db.conn.commit()
                             st.success("Conversation updated successfully!")
@@ -152,13 +155,14 @@ def edit_delete_record_ui(filter_type):
                     if st.button("Delete Record"):
                         # Delete the record from the database
                         with ConversationDatabaseManager() as db:
-                            delete_query = "DELETE FROM conversations WHERE thread_id = %s"
+                            delete_query = "DELETE FROM conversations WHERE thread_id = ?"
                             db.cursor.execute(delete_query, (selected_thread_id,))
                             db.conn.commit()
                             st.success("Record deleted successfully!")
 
                 else:
                     st.error("No record found for the selected Thread ID.")
+
 
 def search_and_edit_conversation():
     # Step 1: Input for search string
@@ -167,10 +171,11 @@ def search_and_edit_conversation():
     if search_query:
         # Fetch records containing the search string in the conversation column
         with ConversationDatabaseManager() as db:
-            query = f"SELECT * FROM conversations WHERE conversation LIKE %s"
+            query = "SELECT * FROM conversations WHERE conversation LIKE ?"
             db.cursor.execute(query, (f"%{search_query}%",))
             records = db.cursor.fetchall()
-        ph=st.empty()
+        
+        ph = st.empty()
         if records:
             # Convert records to DataFrame for better display
             df = pd.DataFrame(records, columns=[desc[0] for desc in db.cursor.description])
@@ -190,7 +195,7 @@ def search_and_edit_conversation():
                     if st.button("Submit Changes"):
                         # Update the conversation in the database
                         with ConversationDatabaseManager() as db:
-                            update_query = "UPDATE conversations SET conversation = %s WHERE thread_id = %s"
+                            update_query = "UPDATE conversations SET conversation = ? WHERE thread_id = ?"
                             db.cursor.execute(update_query, (edited_conversation, selected_thread_id))
                             db.conn.commit()
                             st.success("Conversation updated successfully!")
@@ -216,3 +221,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
