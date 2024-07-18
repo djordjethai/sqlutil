@@ -56,24 +56,6 @@ def handle_record_deletion(table_name, id_column, name_column):
 
 # Mapping table specifics for reuse
 table_mappings = {
-    "Users": {
-        "table_name": "Users",
-        "id_column": "UserID",
-        "name_column": "Username",
-        "additional_fields": None
-    },
-    "Variables": {
-        "table_name": "PromptVariables",
-        "id_column": "VariableID",
-        "name_column": "VariableName",
-        "additional_fields": None
-    },
-    "Python files": {
-        "table_name": "PythonFiles",
-        "id_column": "FileID",
-        "name_column": "Filename",
-        "additional_fields": {"FilePath": "File Path"}
-    },
     "Prompts": {
         "table_name": "PromptStrings",
         "id_column": "PromptID",
@@ -82,24 +64,6 @@ table_mappings = {
     }
 }
 table_configurations = {
-    "Users": {
-        "form_id": "add_user_form",
-        "header": "Add a New User",
-        "table_name": "Users",
-        "input_fields": {"Username": "Username"}
-    },
-    "Variables": {
-        "form_id": "add_variable_form",
-        "header": "Add a New Variable",
-        "table_name": "PromptVariables",
-        "input_fields": {"VariableName": "Variable"}
-    },
-    "Python files": {
-        "form_id": "add_python_form",
-        "header": "Add a New Python file name",
-        "table_name": "PythonFiles",
-        "input_fields": {"Filename": "File name", "FilePath": "Repo"}
-    },
     "Prompts": {
         "form_id": "add_prompts_form",
         "header": "Add a New Prompt String",
@@ -109,21 +73,6 @@ table_configurations = {
 }
 
 deletion_configurations = {
-    "Users": {
-        "table_name": "Users",
-        "id_column": "UserID",
-        "name_column": "Username"
-    },
-    "Variables": {
-        "table_name": "PromptVariables",
-        "id_column": "VariableID",
-        "name_column": "VariableName"
-    },
-    "Python files": {
-        "table_name": "PythonFiles",
-        "id_column": "FileID",
-        "name_column": "Filename"
-    },
     "Prompts": {
         "table_name": "PromptStrings",
         "id_column": "PromptID",
@@ -176,14 +125,11 @@ def show_all_table_data(table_name):
     else:
         st.error("Mismatch between record data and column definitions. Please check the database schema and data consistency.")
 
-
-
-
         
 if operation == "Create New Record":
     st.subheader("Create a New Prompt Record")
     
-    tabela_za_unos = st.selectbox("Choose table",[''] + ["Users", "Variables", "Python files", "Prompts", "Relations"])
+    tabela_za_unos = "Prompts"
     col1, col2 = st.columns(2)
     
     if tabela_za_unos in table_configurations:
@@ -193,95 +139,18 @@ if operation == "Create New Record":
         with col2:
             show_all_table_data(config["table_name"])
            
-    elif tabela_za_unos == "Relations":
-        with col1:
-            st.subheader('Add a New Relationship Record')
-            with PromptDatabase() as db:
-                prompt_options = db.get_records_from_column('PromptStrings', 'PromptName')
-                user_options = db.get_records_from_column('Users', 'Username')
-                variable_options = db.get_records_from_column('PromptVariables', 'VariableName')
-                file_options = db.get_records_from_column('PythonFiles', 'Filename')
-
-            selected_prompt_name = st.selectbox('Select Prompt', [''] + prompt_options)
-            selected_user_name = st.selectbox('Select User', [''] + user_options)
-            selected_variable_name = st.selectbox('Select Variable', [''] + variable_options)
-            selected_file_name = st.selectbox('Select File', [''] + file_options)
-
-            if st.button('Add Relationship'):
-                with PromptDatabase() as db:
-                    if all([selected_prompt_name, selected_user_name, selected_variable_name, selected_file_name]):
-                        prompt_id = db.get_record_by_name('PromptStrings', 'PromptName', selected_prompt_name).get('PromptID') if selected_prompt_name else None
-                        user_id = db.get_record_by_name('Users', 'Username', selected_user_name).get('UserID') if selected_user_name else None
-                        variable_id = db.get_record_by_name('PromptVariables', 'VariableName', selected_variable_name).get('VariableID') if selected_variable_name else None
-                        file_id = db.get_record_by_name('PythonFiles', 'Filename', selected_file_name).get('FileID') if selected_file_name else None
-                
-                        result = db.add_relationship_record(prompt_id, user_id, variable_id, file_id)
-                        if result:
-                            st.success('Relationship added successfully!')
-                        else:
-                            st.error('Failed to add the relationship.')
-                    else:
-                        st.error('Please make sure all fields are selected.')
-        with col2:
-            show_all_table_data("CentralRelationshipTable")     
 
 elif operation == "Select and Update Record":
     st.subheader("Edit Record")
-    tabela_za_unos = st.selectbox("Choose table",[''] + ["Users", "Variables", "Python files", "Prompts", "Relations"])
+    tabela_za_unos = "Prompts"
     col1, col2 = st.columns(2)
    
     if tabela_za_unos in table_mappings:
         handle_table_update(**table_mappings[tabela_za_unos])
-             
-    elif tabela_za_unos == "Relations":
-        with col1:    
-            with PromptDatabase() as db:
-               user_names = db.get_records_from_column('Users', 'Username')
-            selected_user_name = st.selectbox("Select User Name to Edit Relationship", [''] + user_names, key="edit_rel")
-            if selected_user_name:
-                with PromptDatabase() as db:
-                    user_details = db.get_record_by_name('Users', 'Username', selected_user_name)
-                if user_details:
-                    with PromptDatabase() as db:
-                        relationships = db.get_relationships_by_user_id(user_details['UserID'])
-                    if relationships:
-                        for relationship in relationships:
-                            current_prompt_name = relationship['PromptName']
-                            current_variable_name = relationship['VariableName']
-                            current_file_name = relationship['Filename']
-                            with PromptDatabase() as db:
-                                prompt_names = db.get_records_from_column('PromptStrings', 'PromptName')
-                                variable_names = db.get_records_from_column('PromptVariables', 'VariableName')
-                                file_names = db.get_records_from_column('PythonFiles', 'Filename')
-
-                            new_selected_prompt_name = col1.selectbox("Select New Prompt", prompt_names, index=prompt_names.index(current_prompt_name))
-                            new_selected_variable_name = col1.selectbox("Select New Variable", variable_names, index=variable_names.index(current_variable_name))
-                            new_selected_file_name = col1.selectbox("Select New File", file_names, index=file_names.index(current_file_name))
-
-                            if col1.button(f'Update Relationship for {selected_user_name}'):
-                                with PromptDatabase() as db:
-                                    new_prompt_id = db.get_record_by_name('PromptStrings', 'PromptName', new_selected_prompt_name)['PromptID']
-                                    new_variable_id = db.get_record_by_name('PromptVariables', 'VariableName', new_selected_variable_name)['VariableID']
-                                    new_file_id = db.get_record_by_name('PythonFiles', 'Filename', new_selected_file_name)['FileID']
-
-                                    success = db.update_relationship_record(relationship['ID'], new_prompt_id, user_details['UserID'], new_variable_id, new_file_id)
-                                if success:
-                                    col1.success("Relationship updated successfully!")
-                                else:
-                                    col1.error("Failed to update the relationship.")
-                    else:
-                        col1.error("Failed to update the relationship.")                
-                else:
-                    col1.error("No relationships found for the selected user.")
-
-        with col2:
-            with PromptDatabase() as db:
-                df = db.fetch_relationship_data()
-            st.dataframe(df)
 
 elif operation == "Select and Delete Record":
     st.subheader("Delete Record")
-    tabela_za_unos = st.selectbox("Choose table",[''] + ["Users", "Variables", "Python files", "Prompts", "Relations"])
+    tabela_za_unos = "Prompts"
     col1, col2 = st.columns(2)
    
     if tabela_za_unos in deletion_configurations:
@@ -290,42 +159,6 @@ elif operation == "Select and Delete Record":
 
         with col2:
             show_all_table_data(config["table_name"])
-
-    elif tabela_za_unos == "Relations":
-        with col1:
-            with PromptDatabase() as db:
-                prompt_names = db.get_records_from_column('PromptStrings', 'PromptName')
-                selected_prompt_id = st.selectbox("Select Prompts to Delete", [''] + prompt_names)
-                existing_details = db.get_record_by_name(table="PromptStrings", name_column="PromptName", value=selected_prompt_id) if selected_prompt_id else None
-          
-            if existing_details:
-                prompt_id = existing_details['PromptID']
-                with PromptDatabase() as db:
-                    records = db.fetch_relationship_data(prompt_id)
-                df = pd.DataFrame(records, columns=['RelationshipID', 'PromptName', 'Username', 'VariableName', 'Filename'])
-                with col2: 
-                    st.dataframe(df)
-                    
-                relationship_ids = df['RelationshipID'].tolist()
-                selected_relationship_id = st.selectbox("Select a Relationship to Edit or Delete", relationship_ids)
-
-                if st.button('Delete Relationship'):
-                    with PromptDatabase() as db:
-                        success = db.delete_record('CentralRelationshipTable', ('ID = ?', [selected_relationship_id]))
-                        if success:
-                            st.success("Relationship deleted successfully.")
-                            with PromptDatabase() as db:
-                                records = db.fetch_relationship_data(prompt_id)
-                            df = pd.DataFrame(records, columns=['RelationshipID', 'PromptName', 'Username', 'VariableName', 'Filename'])
-                            with col2: 
-                                st.dataframe(df)
-                            
-                        else:
-                            st.error("Failed to delete the relationship.")
-                else:
-                    st.error("Choose an existing record")                
-            else:
-                st.error("Choose Prompt")
 
 elif operation == "Search Prompt Records":
     st.subheader("Display Prompt Records Filtered by Search String")
